@@ -1,10 +1,23 @@
 #!/usr/bin/python3
 import tensorflow as tf
-import numpy as np
 import pandas as pd
-from config import directories
+import os
+from os import path
 
 class Data(object):
+
+    @staticmethod
+    def load_data_from_filesystem(data_dir):
+        path_list = []
+        for path, subdirs, files in os.walk(data_dir):
+            for name in files:
+                relative_path = os.path.join(path, name)
+                absolute_path = os.path.abspath(relative_path)
+                path_list.append(absolute_path)
+        data = {'path': path_list}
+        print("loaded a total of {} images".format(len(path_list)))
+        df = pd.DataFrame(data)
+        return df['path'].values
 
     @staticmethod
     def load_dataframe(filename, load_semantic_maps=False):

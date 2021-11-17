@@ -127,5 +127,5 @@ $letterArray = Get-ChildItem -Path .\cifar\ -Recurse -Include *.png | Where { ! 
 foreach ($letter in $letterArray)
 {
   Write-Host $letter.FullName
-  Resize-Image -Width 1024 -Height 512 -ImagePath $letter.FullName
+  Resize-Image -Width 256 -Height 256 -ImagePath $letter.FullName
 }

@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import time, os, sys
 import argparse
+import sys
 
 # User-defined
 from network import Network
@@ -12,6 +13,7 @@ from data import Data
 from model import Model
 from config import config_train, directories
 
+# TODO: Reintroduce info level
 tf.logging.set_verbosity(tf.logging.ERROR)
 
 def train(config, args):
@@ -21,27 +23,28 @@ def train(config, args):
     ckpt = tf.train.get_checkpoint_state(directories.checkpoints)
 
     # Load data
-    print('Training on dataset', args.dataset)
+    print('Training on dataset {}'.format(args.training_data_dir))
     if config.use_conditional_GAN:
-        print('Using conditional GAN')
-        paths, semantic_map_paths = Data.load_dataframe(os.path.join(directories.data_dir, directories.train), load_semantic_maps=True)
-        test_paths, test_semantic_map_paths = Data.load_dataframe(os.path.join(directories.data_dir, directories.test), load_semantic_maps=True)
+        print('Using conditional GAN not supported. Exit...')
+        sys.exit()
+        # paths, semantic_map_paths = Data.load_dataframe(args.h5_file_train, load_semantic_maps=True)
+        # test_paths, test_semantic_map_paths = Data.load_dataframe(args.h5_file_test, load_semantic_maps=True)
     else:
-        paths = Data.load_dataframe(os.path.join(directories.data_dir, directories.train))
-        test_paths = Data.load_dataframe(os.path.join(directories.data_dir, directories.test))
+        paths = Data.load_data_from_filesystem(args.training_data_dir)
+        test_paths = Data.load_data_from_filesystem(args.test_data_dir)
 
     # Build graph
     gan = Model(config, paths, name=args.name, dataset=args.dataset)
     saver = tf.train.Saver()
 
-    if config.use_conditional_GAN:
-        feed_dict_test_init = {gan.test_path_placeholder: test_paths, 
-                               gan.test_semantic_map_path_placeholder: test_semantic_map_paths}
-        feed_dict_train_init = {gan.path_placeholder: paths,
-                                gan.semantic_map_path_placeholder: semantic_map_paths}
-    else:
-        feed_dict_test_init = {gan.test_path_placeholder: test_paths}
-        feed_dict_train_init = {gan.path_placeholder: paths}
+    # if config.use_conditional_GAN:
+    #     feed_dict_test_init = {gan.test_path_placeholder: test_paths,
+    #                            gan.test_semantic_map_path_placeholder: test_semantic_map_paths}
+    #     feed_dict_train_init = {gan.path_placeholder: paths,
+    #                             gan.semantic_map_path_placeholder: semantic_map_paths}
+    # else:
+    feed_dict_test_init = {gan.test_path_placeholder: test_paths}
+    feed_dict_train_init = {gan.path_placeholder: paths}
 
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
         sess.run(tf.global_variables_initializer())
@@ -110,6 +113,8 @@ def main(**kwargs):
     parser.add_argument("-opt", "--optimizer", default="adam", help="Selected optimizer", type=str)
     parser.add_argument("-name", "--name", default="gan-train", help="Checkpoint/Tensorboard label")
     parser.add_argument("-ds", "--dataset", default="cityscapes", help="choice of training dataset. Currently only supports cityscapes/ADE20k", choices=set(("cityscapes", "ADE20k")), type=str)
+    parser.add_argument("--training-data-dir", help="directory holding training images")
+    parser.add_argument("--test-data-dir", help="directory holding test images")
     args = parser.parse_args()
 
     # Launch training

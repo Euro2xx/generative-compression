@@ -177,10 +177,10 @@ class Model():
             tf.summary.image('semantic_map', self.semantic_map, max_outputs=4)
         self.merge_op = tf.summary.merge_all()
 
-        tensorboard_folder = '{}_train_{}'.format(name, time.strftime('%d-%m_%I'))
+        tensorboard_folder = '{}_train_{}'.format(name, time.strftime('%d-%m_%Y_%H_%M'))
 
-        if not path.exists(tensorboard_folder):
-            os.mkdir(tensorboard_folder)
+        # if not path.exists(tensorboard_folder):
+        #     os.mkdir(tensorboard_folder)
 
         self.train_writer = tf.summary.FileWriter(
             os.path.join(directories.tensorboard, tensorboard_folder), graph=tf.get_default_graph())

@@ -21,7 +21,7 @@ def train(config, args):
     ckpt = tf.train.get_checkpoint_state(directories.checkpoints)
 
     # Load data
-    print('Training on dataset', args.dataset)
+    print('Training on dataset {}'.format(args.training_data_dir))
     if config.use_conditional_GAN:
         print('Using conditional GAN')
         paths, semantic_map_paths = Data.load_dataframe(directories.train, load_semantic_maps=True)
