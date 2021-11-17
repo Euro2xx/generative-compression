@@ -8,10 +8,9 @@ from config import directories
 from utils import Utils
 
 import os.path
-from os import path
 
 class Model():
-    def __init__(self, config, paths, dataset, name='gan_compression', evaluate=False):
+    def __init__(self, config, paths, name='gan_compression', evaluate=False):
 
         # Build the computational graph
 
@@ -31,14 +30,12 @@ class Model():
         train_dataset = Data.load_dataset(self.path_placeholder,
                                           config.batch_size,
                                           augment=False,
-                                          training_dataset=dataset,
                                           use_conditional_GAN=config.use_conditional_GAN,
                                           semantic_map_paths=self.semantic_map_path_placeholder)
 
         test_dataset = Data.load_dataset(self.test_path_placeholder,
                                          config.batch_size,
                                          augment=False,
-                                         training_dataset=dataset,
                                          use_conditional_GAN=config.use_conditional_GAN,
                                          semantic_map_paths=self.test_semantic_map_path_placeholder,
                                          test=True)
@@ -177,12 +174,7 @@ class Model():
             tf.summary.image('semantic_map', self.semantic_map, max_outputs=4)
         self.merge_op = tf.summary.merge_all()
 
-        tensorboard_folder = '{}_train_{}'.format(name, time.strftime('%d-%m_%Y_%H_%M'))
-
-        # if not path.exists(tensorboard_folder):
-        #     os.mkdir(tensorboard_folder)
-
         self.train_writer = tf.summary.FileWriter(
-            os.path.join(directories.tensorboard, tensorboard_folder), graph=tf.get_default_graph())
+            os.path.join(directories.tensorboard, name), graph=tf.get_default_graph())
         self.test_writer = tf.summary.FileWriter(
-            os.path.join(directories.tensorboard, tensorboard_folder))
+            os.path.join(directories.tensorboard, name))

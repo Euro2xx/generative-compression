@@ -29,8 +29,7 @@ class Data(object):
             return df['path'].values
 
     @staticmethod
-    def load_dataset(image_paths, batch_size, test=False, augment=False, downsample=False,
-            training_dataset='cityscapes', use_conditional_GAN=False, **kwargs):
+    def load_dataset(image_paths, batch_size, test=False, augment=False, downsample=False, use_conditional_GAN=False, **kwargs):
 
         def _augment(image):
             # On-the-fly data augmentation
@@ -63,23 +62,20 @@ class Data(object):
 
             # im.set_shape([512,1024,3])  # downscaled cityscapes
 
-            if use_conditional_GAN:
-                # Semantic map only enabled for cityscapes
-                semantic_map = _image_decoder(semantic_map_path)           
+            # if use_conditional_GAN:
+            #     # Semantic map only enabled for cityscapes
+            #     semantic_map = _image_decoder(semantic_map_path)
+            #
+            # if training_dataset == 'ADE20k':
+            #     image = _aspect_preserving_width_resize(image)
+            #     if use_conditional_GAN:
+            #         semantic_map = _aspect_preserving_width_resize(semantic_map)
+            #     # im.set_shape([None,512,3])
 
-            if training_dataset == 'ADE20k':
-                image = _aspect_preserving_width_resize(image)
-                if use_conditional_GAN:
-                    semantic_map = _aspect_preserving_width_resize(semantic_map)
-                # im.set_shape([None,512,3])
-
-            if use_conditional_GAN:
-                return image, semantic_map
-            else:
-                return image
-            
-
-        print('Training on', training_dataset)
+            # if use_conditional_GAN:
+            #     return image, semantic_map
+            # else:
+            return image
 
         if use_conditional_GAN:
             dataset = tf.data.Dataset.from_tensor_slices((image_paths, kwargs['semantic_map_paths']))
@@ -98,7 +94,7 @@ class Data(object):
 
     @staticmethod
     def load_cGAN_dataset(image_paths, semantic_map_paths, batch_size, test=False, augment=False, downsample=False,
-            training_dataset='cityscapes'):
+            training_dataset='cifar'):
         """
         Load image dataset with semantic label maps for conditional GAN
         """ 

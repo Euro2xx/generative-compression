@@ -16,6 +16,8 @@ from config import config_train, directories
 # TODO: Reintroduce info level
 tf.logging.set_verbosity(tf.logging.ERROR)
 
+EXPERIMENT_NAME = ""
+
 def train(config, args):
 
     start_time = time.time()
@@ -34,7 +36,7 @@ def train(config, args):
         test_paths = Data.load_data_from_filesystem(args.test_data_dir)
 
     # Build graph
-    gan = Model(config, paths, name=args.name, dataset=args.dataset)
+    gan = Model(config, paths, name=args.name)
     saver = tf.train.Saver()
 
     # if config.use_conditional_GAN:
@@ -112,10 +114,12 @@ def main(**kwargs):
     parser.add_argument("-r", "--restore_path", help="path to model to be restored", type=str)
     parser.add_argument("-opt", "--optimizer", default="adam", help="Selected optimizer", type=str)
     parser.add_argument("-name", "--name", default="gan-train", help="Checkpoint/Tensorboard label")
-    parser.add_argument("-ds", "--dataset", default="cityscapes", help="choice of training dataset. Currently only supports cityscapes/ADE20k", choices=set(("cityscapes", "ADE20k")), type=str)
+    #parser.add_argument("-ds", "--dataset", default="cityscapes", help="choice of training dataset. Currently only supports cityscapes/ADE20k", choices=set(("cityscapes", "ADE20k")), type=str)
     parser.add_argument("--training-data-dir", help="directory holding training images")
     parser.add_argument("--test-data-dir", help="directory holding test images")
     args = parser.parse_args()
+
+    args.name = '{}_train_{}'.format(args.name, time.strftime('%d-%m_%Y_%H_%M'))
 
     # Launch training
     train(config_train, args)

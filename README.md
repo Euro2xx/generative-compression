@@ -1,4 +1,41 @@
-# generative-compression
+# generative-compression with transformer based methods
+
+## Requirements
+- Python 3.7+ installed, 
+- Dependencies are installed via `pip install -r requirements.txt`,
+- The installation will require a GPU as Tensorflow is required.
+- Ideally virtual environments are leveraged. 
+
+Exemplary setup:
+```
+pyenv global 3.7.9
+python -m virtualenv venv
+.\venv\Scripts\activate # Alternative UNIX commands required.
+```
+
+## Data Preparation
+- All data preparation scripts are included in the respecitve subfolder: [preparation scripts](data/preparation_pipeline)
+- Executed in as a numbered preparation pipeline, the scripts will:
+  - `1_convert.ps1` will convert a given png file no matter its size to 512x1024 as this is the selected scale, 
+  - `2_create-stage-folder.py` will copy the resized images to the respective image folders to start data training, testing and validation.
+- Sample execution:
+```
+.\preparation_pipeline\1_convert.ps1
+python .\preparation_pipeline\2_create-stage-folder.py --data-dir .\cifar\ --output-dir cifar-1024-512
+```
+
+## Training
+Adoptions to forked repository:
+- An h5-file is not longer needed, instead the `train.py` script arguments are adopted to take folder of images as an input,
+- cGAN connection was removed as it is not in scope for the given thesis.
+- Datasets had been generalised. The algorithm no longer depends on existing datasets like _cityscapes_ but with any dataset given the mentioned size restrictions.
+
+Executions:
+```
+python train.py -opt momentum --training-data-dir .\data\cifar-1024-512\train --test-data-dir .\data\cifar-1024-512\test
+```
+
+## Original README.md
 
 TensorFlow Implementation for learned compression of images using Generative Adversarial Networks. The method was developed by Agustsson et. al. in [Generative Adversarial Networks for Extreme Learned Image Compression](https://arxiv.org/abs/1804.02958). The proposed idea is very interesting and their approach is well-described.
 

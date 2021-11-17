@@ -2,7 +2,7 @@
 
 class config_train(object):
     mode = 'gan-train'
-    num_epochs = 512
+    num_epochs = 1
     batch_size = 1
     ema_decay = 0.999
     G_learning_rate = 2e-4
@@ -35,7 +35,7 @@ class config_train(object):
 
 class config_test(object):
     mode = 'gan-test'
-    num_epochs = 512
+    num_epochs = 1
     batch_size = 1
     ema_decay = 0.999
     G_learning_rate = 2e-4

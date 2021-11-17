@@ -19,20 +19,12 @@ def single_compress(config, args):
     ckpt = tf.train.get_checkpoint_state(directories.checkpoints)
     assert (ckpt.model_checkpoint_path), 'Missing checkpoint file!'
 
-    if config.use_conditional_GAN:
-        print('Using conditional GAN')
-        paths, semantic_map_paths = np.array([args.image_path]), np.array([args.semantic_map_path])
-    else:
-        paths = np.array([args.image_path])
+    paths = np.array([args.image_path])
 
-    gan = Model(config, paths, name='single_compress', dataset=args.dataset, evaluate=True)
+    gan = Model(config, paths, name='single_compress', evaluate=True)
     saver = tf.train.Saver()
 
-    if config.use_conditional_GAN:
-        feed_dict_init = {gan.path_placeholder: paths,
-                          gan.semantic_map_path_placeholder: semantic_map_paths}
-    else:
-        feed_dict_init = {gan.path_placeholder: paths}
+    feed_dict_init = {gan.path_placeholder: paths}
 
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
         # Initialize variables
@@ -70,7 +62,7 @@ def main(**kwargs):
     parser.add_argument("-i", "--image_path", help="path to image to compress", type=str)
     parser.add_argument("-sm", "--semantic_map_path", help="path to corresponding semantic map", type=str)
     parser.add_argument("-o", "--output_path", help="path to output image", type=str)
-    parser.add_argument("-ds", "--dataset", default="cityscapes", help="choice of training dataset. Currently only supports cityscapes/ADE20k", choices=set(("cityscapes", "ADE20k")), type=str)
+    #parser.add_argument("-ds", "--dataset", default="cityscapes", help="choice of training dataset. Currently only supports cityscapes/ADE20k", choices=set(("cityscapes", "ADE20k")), type=str)
     args = parser.parse_args()
 
     # Launch training

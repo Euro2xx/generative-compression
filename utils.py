@@ -5,6 +5,7 @@ import tensorflow as tf
 import numpy as np
 import os, time
 import matplotlib as mpl
+
 mpl.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -136,8 +137,13 @@ class Utils(object):
         if single_compress:
             f.savefig(name, format='pdf', dpi=720, bbox_inches='tight', pad_inches=0)
         else:
-            f.savefig("{}/gan_compression_{}_epoch{}_step{}_{}_comparison.pdf".format(directories.samples, name, epoch,
-                global_step, imtype), format='pdf', dpi=720, bbox_inches='tight', pad_inches=0)
+            directory = os.path.join("samples", name)
+            print("Save to {}...".format(directory))
+            if not os.path.exists(directory):
+                os.mkdir(directory)
+            filepath = os.path.join(directory, "gan_compression_{}_epoch{}_step{}_{}_comparison.pdf".format(name, epoch,
+                global_step, imtype))
+            f.savefig(filepath, format='pdf', dpi=720, bbox_inches='tight', pad_inches=0)
         plt.gcf().clear()
         plt.close(f)
 
