@@ -35,6 +35,16 @@ Executions:
 python train.py -opt momentum --training-data-dir .\data\cifar-1024-512\train --test-data-dir .\data\cifar-1024-512\test
 ```
 
+## Single Image Compression
+Adoptions to forked repository:
+- Renamed script arguments,
+- Introduced standard output folder.
+
+Executions:
+```
+python compress.py -rl --image-path .\data\cifar-1024-512\test\cifar_test_automobile_0002_resized.png --output-path cifar_test_automobile_0002_resized.pdf
+```
+
 ## Original README.md
 
 TensorFlow Implementation for learned compression of images using Generative Adversarial Networks. The method was developed by Agustsson et. al. in [Generative Adversarial Networks for Extreme Learned Image Compression](https://arxiv.org/abs/1804.02958). The proposed idea is very interesting and their approach is well-described.

@@ -135,7 +135,10 @@ class Utils(object):
         plt.imshow(comparison)
         plt.axis('off')
         if single_compress:
-            f.savefig(name, format='pdf', dpi=720, bbox_inches='tight', pad_inches=0)
+            filename = os.path.join("output", name)
+            if not os.path.exists("output"):
+                os.mkdir("output")
+            f.savefig(filename, format='pdf', dpi=720, bbox_inches='tight', pad_inches=0)
         else:
             directory = os.path.join("samples", name)
             print("Save to {}...".format(directory))

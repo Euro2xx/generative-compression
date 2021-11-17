@@ -16,8 +16,6 @@ tf.logging.set_verbosity(tf.logging.ERROR)
 
 def single_compress(config, args):
     start = time.time()
-    ckpt = tf.train.get_checkpoint_state(directories.checkpoints)
-    assert (ckpt.model_checkpoint_path), 'Missing checkpoint file!'
 
     paths = np.array([args.image_path])
 
@@ -32,7 +30,10 @@ def single_compress(config, args):
         sess.run(tf.local_variables_initializer())
         handle = sess.run(gan.train_iterator.string_handle())
 
-        if args.restore_last and ckpt.model_checkpoint_path:
+        if args.restore_last:
+            ckpt = tf.train.get_checkpoint_state(directories.checkpoints)
+            assert (ckpt.model_checkpoint_path), 'Missing checkpoint file!'
+
             saver.restore(sess, ckpt.model_checkpoint_path)
             print('Most recent {} restored.'.format(ckpt.model_checkpoint_path))
         else:
@@ -57,11 +58,11 @@ def single_compress(config, args):
 
 def main(**kwargs):
     parser = argparse.ArgumentParser()
-    parser.add_argument("-rl", "--restore_last", help="restore last saved model", action="store_true")
-    parser.add_argument("-r", "--restore_path", help="path to model to be restored", type=str)
-    parser.add_argument("-i", "--image_path", help="path to image to compress", type=str)
-    parser.add_argument("-sm", "--semantic_map_path", help="path to corresponding semantic map", type=str)
-    parser.add_argument("-o", "--output_path", help="path to output image", type=str)
+    parser.add_argument("-rl", "--restore-last", help="restore last saved model", action="store_true")
+    parser.add_argument("-r", "--restore-path", help="path to model to be restored", type=str)
+    parser.add_argument("-i", "--image-path", help="path to image to compress", type=str)
+    parser.add_argument("-sm", "--semantic-map-path", help="path to corresponding semantic map", type=str)
+    parser.add_argument("-o", "--output-path", help="path to output image", type=str)
     #parser.add_argument("-ds", "--dataset", default="cityscapes", help="choice of training dataset. Currently only supports cityscapes/ADE20k", choices=set(("cityscapes", "ADE20k")), type=str)
     args = parser.parse_args()
 
