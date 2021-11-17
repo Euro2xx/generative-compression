@@ -24,11 +24,11 @@ def train(config, args):
     print('Training on dataset', args.dataset)
     if config.use_conditional_GAN:
         print('Using conditional GAN')
-        paths, semantic_map_paths = Data.load_dataframe(directories.train, load_semantic_maps=True)
-        test_paths, test_semantic_map_paths = Data.load_dataframe(directories.test, load_semantic_maps=True)
+        paths, semantic_map_paths = Data.load_dataframe(os.path.join(directories.data_dir, directories.train), load_semantic_maps=True)
+        test_paths, test_semantic_map_paths = Data.load_dataframe(os.path.join(directories.data_dir, directories.test), load_semantic_maps=True)
     else:
-        paths = Data.load_dataframe(directories.train)
-        test_paths = Data.load_dataframe(directories.test)
+        paths = Data.load_dataframe(os.path.join(directories.data_dir, directories.train))
+        test_paths = Data.load_dataframe(os.path.join(directories.data_dir, directories.test))
 
     # Build graph
     gan = Model(config, paths, name=args.name, dataset=args.dataset)

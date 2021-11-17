@@ -1,5 +1,3 @@
-#!/usr/bin/python3
-    
 import tensorflow as tf
 import numpy as np
 import glob, time, os
@@ -8,6 +6,9 @@ from network import Network
 from data import Data
 from config import directories
 from utils import Utils
+
+import os.path
+from os import path
 
 class Model():
     def __init__(self, config, paths, dataset, name='gan_compression', evaluate=False):
@@ -176,7 +177,12 @@ class Model():
             tf.summary.image('semantic_map', self.semantic_map, max_outputs=4)
         self.merge_op = tf.summary.merge_all()
 
+        tensorboard_folder = '{}_train_{}'.format(name, time.strftime('%d-%m_%I'))
+
+        if not path.exists(tensorboard_folder):
+            os.mkdir(tensorboard_folder)
+
         self.train_writer = tf.summary.FileWriter(
-            os.path.join(directories.tensorboard, '{}_train_{}'.format(name, time.strftime('%d-%m_%I:%M'))), graph=tf.get_default_graph())
+            os.path.join(directories.tensorboard, tensorboard_folder), graph=tf.get_default_graph())
         self.test_writer = tf.summary.FileWriter(
-            os.path.join(directories.tensorboard, '{}_test_{}'.format(name, time.strftime('%d-%m_%I:%M'))))
+            os.path.join(directories.tensorboard, tensorboard_folder))

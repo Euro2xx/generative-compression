@@ -75,6 +75,12 @@ class Utils(object):
         feed_dict_test = {model.training_phase: False, model.handle: train_handle}
 
         try:
+            print("Gan", model)
+            print("config", config)
+            print("dir", directories)
+            print("sess", sess)
+            print("saver", saver)
+            print("train-handle", train_handle)
             G_loss, D_loss, summary = sess.run([model.G_loss, model.D_loss, model.merge_op], feed_dict=feed_dict_test)
             model.train_writer.add_summary(summary)
         except tf.errors.OutOfRangeError:

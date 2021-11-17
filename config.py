@@ -67,11 +67,13 @@ class config_test(object):
     use_conditional_GAN = False
 
 class directories(object):
-    train = 'data/cityscapes_paths_train.h5'
-    test = 'data/cityscapes_paths_test.h5'
-    val = 'data/cityscapes_paths_val.h5'
+    data_dir = 'data'
+    train = 'cifar.h5'
+    test = 'cifar.h5'
+    val = 'cifar.h5'
     tensorboard = 'tensorboard'
     checkpoints = 'checkpoints'
     checkpoints_best = 'checkpoints/best'
-    samples = 'samples/cityscapes'
+    samples = 'cityscapes'
+    samples_dir = 'samples'
 
