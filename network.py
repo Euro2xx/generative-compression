@@ -5,6 +5,7 @@ import tensorflow as tf
 from utils import Utils
 import numpy as np
 
+
 def get_weight(shape, gain = 1, use_wscale = True, lrmul = 1, weight_var = "weight"):
     fan_in = np.prod(shape[:-1])
     he_std = gain / np.sqrt(fan_in)
@@ -34,7 +35,32 @@ def conv2d_layer(x, filters, kernel_size, up = False, down = False, resample_ker
     x = tf.nn.conv2d(x, w, data_format = "NCHW", strides = [1, 1, 1, 1], padding = "SAME")
     return x
 
+def dense_layer(x, dim, gain = 1, use_wscale = True, lrmul = 1, weight_var = "weight", name = None):
+    if name is not None:
+        weight_var = "{}_{}".format(weight_var, name)
 
+    w = get_weight([get_shape(x)[1], dim], gain = gain, use_wscale = use_wscale,
+        lrmul = lrmul, weight_var = weight_var)
+
+    return tf.matmul(x, w)
+
+def get_shape(x):
+    shape, dyn_shape = x.shape.as_list().copy(), tf.shape(x)
+    for index, dim in enumerate(shape):
+        if dim is None:
+            shape[index] = dyn_shape[index]
+    return shape
+
+def mlp(x, resnet, layers_num, dim, act, lrmul, pooling = "mean", transformer = False, norm_type = None, **kwargs):
+    shape = get_shape(x)
+
+    for layer_idx in range(layers_num):
+        with tf.variable_scope("Dense%d" % layer_idx):
+            x = apply_bias_act(dense_layer(x, dim, lrmul = lrmul), act = act, lrmul = lrmul)
+            x = norm(x, norm_type)
+
+    x = tf.reshape(x, [-1] + shape[1:-1] + [dim])
+    return x
 
 class Network(object):
 
@@ -51,7 +77,7 @@ class Network(object):
         def conv_block(x, filters, kernel_size=[3,3], strides=2, padding='same', actv=actv, init=init):
             bn_kwargs = {'center':True, 'scale':True, 'training':training, 'fused':True, 'renorm':False}
             in_kwargs = {'center':True, 'scale': True}
-            x = tf.layers.conv2d_layer(x, filters, kernel_size, strides=strides, padding=padding, activation=None)
+            x = tf.layers.conv2d(x, filters, kernel_size, strides=strides, padding=padding, activation=None)
             # x = tf.layers.batch_normalization(x, **bn_kwargs)
             x = tf.contrib.layers.instance_norm(x, **in_kwargs)
             x = actv(x)
@@ -65,15 +91,19 @@ class Network(object):
             out = conv_block(x, filters=f[0], kernel_size=7, strides=1, padding='VALID', actv=actv)
 
             out = conv_block(out, filters=f[1], kernel_size=3, strides=2, actv=actv)
+            print("1 layer", tf.shape(out))
             out = conv_block(out, filters=f[2], kernel_size=3, strides=2, actv=actv)
+            print("2 layer", tf.shape(out))
             out = conv_block(out, filters=f[3], kernel_size=3, strides=2, actv=actv)
+            print("3 layer", tf.shape(out))
             out = conv_block(out, filters=f[4], kernel_size=3, strides=2, actv=actv)
-
+            print("4 layer", tf.shape(out))
             # Project channels onto space w/ dimension C
             # Feature maps have dimension W/16 x H/16 x C
             out = tf.pad(out, [[0, 0], [1, 1], [1, 1], [0, 0]], 'REFLECT')
+
             feature_map = conv_block(out, filters=C, kernel_size=3, strides=1, padding='VALID', actv=actv)
-            
+            print("feature map", tf.shape(feature_map))
             return feature_map
 
 
@@ -207,7 +237,7 @@ class Network(object):
 
 
     @staticmethod
-    def multiscale_discriminator(x, config, training, actv=tf.nn.leaky_relu, use_sigmoid=False, 
+    def multiscale_discriminator(x, config, training, actv=tf.nn.leaky_relu, use_sigmoid=False,
         ksize=4, mode='real', reuse=False):
         # x is either generator output G(z) or drawn from the real data distribution
         # Multiscale + Patch-GAN discriminator architecture based on arXiv 1711.11585
@@ -277,7 +307,7 @@ class Network(object):
             with tf.variable_scope('upsample2', reuse=reuse):
                 up2 = tf.layers.conv2d_transpose(up1, upsample_dim//4, kernel_size=kernel_size, strides=2, padding='same', activation=actv)
                 up2 = tf.layers.batch_normalization(up2, **kwargs)
-            
+
             # [batch_size, 32, 64, dim/8]
             with tf.variable_scope('upsample3', reuse=reuse):
                 up3 = tf.layers.conv2d_transpose(up2, upsample_dim//8, kernel_size=kernel_size, strides=2, padding='same', activation=actv)  # cifar-10
@@ -295,8 +325,8 @@ class Network(object):
         init =  tf.contrib.layers.xavier_initializer()
         kwargs = {'center':True, 'scale':True, 'training':training, 'fused':True, 'renorm':False}
         print('Shape of x:', x.get_shape().as_list())
-        x = tf.reshape(x, shape=[-1, 32, 32, 3]) 
-        # x = tf.reshape(x, shape=[-1, 28, 28, 1]) 
+        x = tf.reshape(x, shape=[-1, 32, 32, 3])
+        # x = tf.reshape(x, shape=[-1, 28, 28, 1])
 
         with tf.variable_scope('discriminator', reuse=reuse):
             with tf.variable_scope('conv1', reuse=reuse):
@@ -312,186 +342,9 @@ class Network(object):
                 # fc1 = tf.reshape(c2, shape=[-1, 8 * 8 * 128])
                 fc1 = tf.layers.dense(fc1, units=1024, activation=actv, kernel_initializer=init)
                 fc1 = tf.layers.batch_normalization(fc1, **kwargs)
-            
+
             with tf.variable_scope('out', reuse=reuse):
                 out = tf.layers.dense(fc1, units=2, activation=None, kernel_initializer=init)
 
         return out
-        
-
-    @staticmethod
-    def critic_grande(x, config, training, reuse=False, actv=tf.nn.relu, kernel_size=5, gradient_penalty=True):
-        # x is either generator output G(z) or drawn from the real data distribution
-        init =  tf.contrib.layers.xavier_initializer()
-        kwargs = {'center':True, 'scale':True, 'training':training, 'fused':True, 'renorm':False}
-        print('Shape of x:', x.get_shape().as_list())
-        x = tf.reshape(x, shape=[-1, 32, 32, 3]) 
-        # x = tf.reshape(x, shape=[-1, 28, 28, 1]) 
-
-        with tf.variable_scope('critic', reuse=reuse):
-            with tf.variable_scope('conv1', reuse=reuse):
-                c1 = tf.layers.conv2d(x, 64, kernel_size=kernel_size, strides=2, padding='same', activation=actv)
-                if gradient_penalty is False:
-                    c1 = tf.layers.batch_normalization(c1, **kwargs)
-
-            with tf.variable_scope('conv2', reuse=reuse):
-                c2 = tf.layers.conv2d(c1, 128, kernel_size=kernel_size, strides=2, padding='same', activation=actv)
-                if gradient_penalty is False:
-                    c2 = tf.layers.batch_normalization(c2, **kwargs)
-
-            with tf.variable_scope('conv3', reuse=reuse):
-                c3 = tf.layers.conv2d(c2, 256, kernel_size=kernel_size, strides=2, padding='same', activation=actv)
-                if gradient_penalty is False:
-                    c3 = tf.layers.batch_normalization(c3, **kwargs)
-
-            with tf.variable_scope('fc1', reuse=reuse):
-                fc1 = tf.contrib.layers.flatten(c3)
-                # fc1 = tf.reshape(c2, shape=[-1, 8 * 8 * 128])
-                fc1 = tf.layers.dense(fc1, units=1024, activation=actv, kernel_initializer=init)
-                #fc1 = tf.layers.batch_normalization(fc1, **kwargs)
-            
-            with tf.variable_scope('out', reuse=reuse):
-                out = tf.layers.dense(fc1, units=1, activation=None, kernel_initializer=init)
-
-        return out
-
-    @staticmethod
-    def wrn(x, config, training, reuse=False, actv=tf.nn.relu):
-        # Implements W-28-10 wide residual network
-        # See Arxiv 1605.07146
-        network_width = 10 # k
-        block_multiplicity = 2 # n
-
-        filters = [16, 16, 32, 64]
-        init = tf.contrib.layers.xavier_initializer()
-        kwargs = {'center':True, 'scale':True, 'training':training, 'fused':True, 'renorm':True}
-
-        def residual_block(x, n_filters, actv, keep_prob, training, project_shortcut=False, first_block=False):
-            init = tf.contrib.layers.xavier_initializer()
-            kwargs = {'center':True, 'scale':True, 'training':training, 'fused':True, 'renorm':True}
-
-            if project_shortcut:
-                strides = [2,2] if not first_block else [1,1]
-                identity_map = tf.layers.conv2d(x, filters=n_filters, kernel_size=[1,1],
-                                   strides=strides, kernel_initializer=init, padding='same')
-                # identity_map = tf.layers.batch_normalization(identity_map, **kwargs)
-            else:
-                strides = [1,1]
-                identity_map = x
-
-            bn = tf.layers.batch_normalization(x, **kwargs)
-            conv = tf.layers.conv2d(bn, filters=n_filters, kernel_size=[3,3], activation=actv,
-                       strides=strides, kernel_initializer=init, padding='same')
-
-            bn = tf.layers.batch_normalization(conv, **kwargs)
-            do = tf.layers.dropout(bn, rate=1-keep_prob, training=training)
-
-            conv = tf.layers.conv2d(do, filters=n_filters, kernel_size=[3,3], activation=actv,
-                       kernel_initializer=init, padding='same')
-            out = tf.add(conv, identity_map)
-
-            return out
-
-        def residual_block_2(x, n_filters, actv, keep_prob, training, project_shortcut=False, first_block=False):
-            init = tf.contrib.layers.xavier_initializer()
-            kwargs = {'center':True, 'scale':True, 'training':training, 'fused':True, 'renorm':True}
-            prev_filters = x.get_shape().as_list()[-1]
-            if project_shortcut:
-                strides = [2,2] if not first_block else [1,1]
-                # identity_map = tf.layers.conv2d(x, filters=n_filters, kernel_size=[1,1],
-                #                   strides=strides, kernel_initializer=init, padding='same')
-                identity_map = tf.layers.average_pooling2d(x, strides, strides, 'valid')
-                identity_map = tf.pad(identity_map, 
-                    tf.constant([[0,0],[0,0],[0,0],[(n_filters-prev_filters)//2, (n_filters-prev_filters)//2]]))
-                # identity_map = tf.layers.batch_normalization(identity_map, **kwargs)
-            else:
-                strides = [1,1]
-                identity_map = x
-
-            x = tf.layers.batch_normalization(x, **kwargs)
-            x = tf.nn.relu(x)
-            x = tf.layers.conv2d(x, filters=n_filters, kernel_size=[3,3], strides=strides,
-                    kernel_initializer=init, padding='same')
-
-            x = tf.layers.batch_normalization(x, **kwargs)
-            x = tf.nn.relu(x)
-            x = tf.layers.dropout(x, rate=1-keep_prob, training=training)
-
-            x = tf.layers.conv2d(x, filters=n_filters, kernel_size=[3,3],
-                       kernel_initializer=init, padding='same')
-            out = tf.add(x, identity_map)
-
-            return out
-
-        with tf.variable_scope('wrn_conv', reuse=reuse):
-            # Initial convolution --------------------------------------------->
-            with tf.variable_scope('conv0', reuse=reuse):
-                conv = tf.layers.conv2d(x, filters[0], kernel_size=[3,3], activation=actv,
-                                        kernel_initializer=init, padding='same')
-            # Residual group 1 ------------------------------------------------>
-            rb = conv
-            f1 = filters[1]*network_width
-            for n in range(block_multiplicity):
-                with tf.variable_scope('group1/{}'.format(n), reuse=reuse):
-                    project_shortcut = True if n==0 else False
-                    rb = residual_block(rb, f1, actv, project_shortcut=project_shortcut,
-                            keep_prob=config.conv_keep_prob, training=training, first_block=True)
-            # Residual group 2 ------------------------------------------------>
-            f2 = filters[2]*network_width
-            for n in range(block_multiplicity):
-                with tf.variable_scope('group2/{}'.format(n), reuse=reuse):
-                    project_shortcut = True if n==0 else False
-                    rb = residual_block(rb, f2, actv, project_shortcut=project_shortcut,
-                            keep_prob=config.conv_keep_prob, training=training)
-            # Residual group 3 ------------------------------------------------>
-            f3 = filters[3]*network_width
-            for n in range(block_multiplicity):
-                with tf.variable_scope('group3/{}'.format(n), reuse=reuse):
-                    project_shortcut = True if n==0 else False
-                    rb = residual_block(rb, f3, actv, project_shortcut=project_shortcut,
-                            keep_prob=config.conv_keep_prob, training=training)
-            # Avg pooling + output -------------------------------------------->
-            with tf.variable_scope('output', reuse=reuse):
-                bn = tf.nn.relu(tf.layers.batch_normalization(rb, **kwargs))
-                avp = tf.layers.average_pooling2d(bn, pool_size=[8,8], strides=[1,1], padding='valid')
-                flatten = tf.contrib.layers.flatten(avp)
-                out = tf.layers.dense(flatten, units=config.n_classes, kernel_initializer=init)
-
-            return out
-
-
-    @staticmethod
-    def old_encoder(x, config, training, C, reuse=False, actv=tf.nn.relu):
-        """
-        Process image x ([512,1024]) into a feature map of size W/16 x H/16 x C
-         + C:       Bottleneck depth, controls bpp
-         + Output:  Projection onto C channels, C = {2,4,8,16}
-        """
-        # proj_channels = [2,4,8,16]
-        init = tf.contrib.layers.xavier_initializer()
-
-        def conv_block(x, filters, kernel_size=[3,3], strides=2, padding='same', actv=actv, init=init):
-            in_kwargs = {'center':True, 'scale': True}
-            x = tf.layers.conv2d(x, filters, kernel_size, strides=strides, padding=padding, activation=None)
-            x = tf.contrib.layers.instance_norm(x, **in_kwargs)
-            x = actv(x)
-            return x
-                
-        with tf.variable_scope('encoder', reuse=reuse):
-
-            # Run convolutions
-            out = conv_block(x, kernel_size=3, strides=1, filters=160, actv=actv)
-            out = conv_block(out, kernel_size=[3,3], strides=2, filters=320, actv=actv)
-            out = conv_block(out, kernel_size=[3,3], strides=2, filters=480, actv=actv)
-            out = conv_block(out, kernel_size=[3,3], strides=2, filters=640, actv=actv)
-            out = conv_block(out, kernel_size=[3,3], strides=2, filters=800, actv=actv)
-
-            out = conv_block(out, kernel_size=3, strides=1, filters=960, actv=actv)
-            # Project channels onto lower-dimensional embedding space
-            W = tf.get_variable('W_channel_{}'.format(C), shape=[960,C], initializer=init)
-            feature_map = tf.einsum('ijkl,lm->ijkm', out, W)  # feature_map = tf.tensordot(out, W, axes=((3),(0)))
-            
-            # Feature maps have dimension W/16 x H/16 x C
-            return feature_map
-
 
