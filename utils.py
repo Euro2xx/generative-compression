@@ -161,3 +161,4 @@ class Utils(object):
 
         return tf.multiply(weight_decay, tf.add_n(costs))
 
+

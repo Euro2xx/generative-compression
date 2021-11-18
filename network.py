@@ -3,6 +3,38 @@
 """
 import tensorflow as tf
 from utils import Utils
+import numpy as np
+
+def get_weight(shape, gain = 1, use_wscale = True, lrmul = 1, weight_var = "weight"):
+    fan_in = np.prod(shape[:-1])
+    he_std = gain / np.sqrt(fan_in)
+
+    # Equalized learning rate and custom learning rate multiplier
+    if use_wscale:
+        init_std = 1.0 / lrmul
+        runtime_coef = he_std * lrmul
+    else:
+        init_std = he_std / lrmul
+        runtime_coef = lrmul
+
+    # Create variable
+    init = tf.initializers.random_normal(0, init_std)
+    return tf.get_variable(weight_var, shape = shape, initializer = init) * runtime_coef
+
+
+def conv2d_layer(x, filters, kernel_size, up = False, down = False, resample_kernel = None, gain = 1,
+        use_wscale = True, lrmul = 1, weight_var = "weight"):
+
+    assert not (up and down)
+    assert kernel_size >= 1 and kernel_size % 2 == 1
+    dim = filters
+    w = get_weight([kernel_size, kernel_size, tf.get_shape(x)[1], dim], gain = gain, use_wscale = use_wscale,
+        lrmul = lrmul, weight_var = weight_var)
+
+    x = tf.nn.conv2d(x, w, data_format = "NCHW", strides = [1, 1, 1, 1], padding = "SAME")
+    return x
+
+
 
 class Network(object):
 
@@ -19,7 +51,7 @@ class Network(object):
         def conv_block(x, filters, kernel_size=[3,3], strides=2, padding='same', actv=actv, init=init):
             bn_kwargs = {'center':True, 'scale':True, 'training':training, 'fused':True, 'renorm':False}
             in_kwargs = {'center':True, 'scale': True}
-            x = tf.layers.conv2d(x, filters, kernel_size, strides=strides, padding=padding, activation=None)
+            x = tf.layers.conv2d_layer(x, filters, kernel_size, strides=strides, padding=padding, activation=None)
             # x = tf.layers.batch_normalization(x, **bn_kwargs)
             x = tf.contrib.layers.instance_norm(x, **in_kwargs)
             x = actv(x)
