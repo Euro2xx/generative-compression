@@ -51,9 +51,18 @@ def get_shape(x):
             shape[index] = dyn_shape[index]
     return shape
 
-def mlp(x, resnet, layers_num, dim, act, lrmul, pooling = "mean", transformer = False, norm_type = None, **kwargs):
-    shape = get_shape(x)
+def norm(x, norm_type, parametric = True):
+    if norm_type == "instance":
+        x = tf.contrib.layers.instance_norm(x, data_format = "NCHW", center = parametric, scale = parametric)
+    elif norm_type == "batch":
+        x = tf.contrib.layers.batch_norm(x, data_format = "NCHW", center = parametric, scale = parametric)
+    elif norm_type == "layer":
+        x = tf.contrib.layers.layer_norm(inputs = x, begin_norm_axis = -1, begin_params_axis = -1)
+    return x
 
+def mlp(x, layers_num, act,  pooling = "mean",  norm_type = None, **kwargs):
+    shape = get_shape(x)
+    lrmul = 1
     for layer_idx in range(layers_num):
         with tf.variable_scope("Dense%d" % layer_idx):
             x = apply_bias_act(dense_layer(x, dim, lrmul = lrmul), act = act, lrmul = lrmul)
@@ -91,19 +100,19 @@ class Network(object):
             out = conv_block(x, filters=f[0], kernel_size=7, strides=1, padding='VALID', actv=actv)
 
             out = conv_block(out, filters=f[1], kernel_size=3, strides=2, actv=actv)
-            print("1 layer", tf.shape(out))
+            print("1 layer", out.get_shape().as_list())
             out = conv_block(out, filters=f[2], kernel_size=3, strides=2, actv=actv)
-            print("2 layer", tf.shape(out))
+            print("2 layer", out.get_shape().as_list())
             out = conv_block(out, filters=f[3], kernel_size=3, strides=2, actv=actv)
-            print("3 layer", tf.shape(out))
+            print("3 layer", out.get_shape().as_list())
             out = conv_block(out, filters=f[4], kernel_size=3, strides=2, actv=actv)
-            print("4 layer", tf.shape(out))
+            print("4 layer", out.get_shape().as_list())
             # Project channels onto space w/ dimension C
             # Feature maps have dimension W/16 x H/16 x C
             out = tf.pad(out, [[0, 0], [1, 1], [1, 1], [0, 0]], 'REFLECT')
 
             feature_map = conv_block(out, filters=C, kernel_size=3, strides=1, padding='VALID', actv=actv)
-            print("feature map", tf.shape(feature_map))
+            print("feature map", out.get_shape().as_list())
             return feature_map
 
 
@@ -127,7 +136,7 @@ class Network(object):
 
             # Treat quantization as differentiable for optimization
             w_bar = tf.round(tf.stop_gradient(w_hard - w_soft) + w_soft)
-
+            print("wbar ", w_bar.get_shape().as_list())
             return w_bar
 
 
