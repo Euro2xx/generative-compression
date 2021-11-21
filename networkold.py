@@ -1,13 +1,10 @@
+""" Modular components of computational graph
+    JTan 2018
+"""
 import tensorflow as tf
 from utils import Utils
 import numpy as np
 
-import dnnlib.tflib as tflib
-from dnnlib.tflib.ops.upfirdn_2d import upsample_2d, downsample_2d, upsample_conv_2d, conv_downsample_2d
-from dnnlib.tflib.ops.fused_bias_act import fused_bias_act
-from dnnlib import EasyDict
-
-import math
 
 
 
@@ -23,28 +20,17 @@ class Network(object):
         init = tf.contrib.layers.xavier_initializer()
         print('<------------ Building global {} generator architecture ------------>'.format(scope))
 
-        def conv_block(x, filters, kernel_size=[3, 3], strides=2, padding='same', actv=actv, init=init):
-            bn_kwargs = {'center': True, 'scale': True, 'training': training, 'fused': True, 'renorm': False}
-            in_kwargs = {'center': True, 'scale': True}
+        def conv_block(x, filters, kernel_size=[3,3], strides=2, padding='same', actv=actv, init=init):
+            bn_kwargs = {'center':True, 'scale':True, 'training':training, 'fused':True, 'renorm':False}
+            in_kwargs = {'center':True, 'scale': True}
             x = tf.layers.conv2d(x, filters, kernel_size, strides=strides, padding=padding, activation=None)
             # x = tf.layers.batch_normalization(x, **bn_kwargs)
             x = tf.contrib.layers.instance_norm(x, **in_kwargs)
             x = actv(x)
             return x
 
-        def extract_patches(config, images):
-            batch_size = tf.shape(images)[0]
-            patches = tf.image.extract_patches(
-                images=images,
-                sizes=[1, patch_size, patch_size, 1],
-                strides=[1, patch_size, patch_size, 1],
-                rates=[1, 1, 1, 1],
-                padding="VALID",
-            )
-            patches = tf.reshape(patches, [batch_size, -1, self.patch_dim])
-            return patches
-
         with tf.variable_scope('encoder_{}'.format(scope), reuse=reuse):
+
             # Run convolutions
             f = [60, 120, 240, 480, 960]
             x = tf.pad(x, [[0, 0], [3, 3], [3, 3], [0, 0]], 'REFLECT')
@@ -66,6 +52,7 @@ class Network(object):
             print("feature map", out.get_shape().as_list())
             return feature_map
 
+
     @staticmethod
     def quantizer(w, config, reuse=False, temperature=1, L=5, scope='image'):
         """
@@ -74,12 +61,13 @@ class Network(object):
          + TODO:    Toggle learnable centers?
         """
         with tf.variable_scope('quantizer_{}'.format(scope, reuse=reuse)):
-            centers = tf.cast(tf.range(-2, 3), tf.float32)
+
+            centers = tf.cast(tf.range(-2,3), tf.float32)
             # Partition W into the Voronoi tesellation over the centers
             w_stack = tf.stack([w for _ in range(L)], axis=-1)
             w_hard = tf.cast(tf.argmin(tf.abs(w_stack - centers), axis=-1), tf.float32) + tf.reduce_min(centers)
 
-            smx = tf.nn.softmax(-1.0 / temperature * tf.abs(w_stack - centers), dim=-1)
+            smx = tf.nn.softmax(-1.0/temperature * tf.abs(w_stack - centers), dim=-1)
             # Contract last dimension
             w_soft = tf.einsum('ijklm,m->ijkl', smx, centers)  # w_soft = tf.tensordot(smx, centers, axes=((-1),(0)))
 
@@ -87,6 +75,7 @@ class Network(object):
             w_bar = tf.round(tf.stop_gradient(w_hard - w_soft) + w_soft)
             print("wbar ", w_bar.get_shape().as_list())
             return w_bar
+
 
     @staticmethod
     def decoder(w_bar, config, training, C, reuse=False, actv=tf.nn.relu, channel_upsample=960):
@@ -102,18 +91,18 @@ class Network(object):
         def residual_block(x, n_filters, kernel_size=3, strides=1, actv=actv):
             init = tf.contrib.layers.xavier_initializer()
             # kwargs = {'center':True, 'scale':True, 'training':training, 'fused':True, 'renorm':False}
-            strides = [1, 1]
+            strides = [1,1]
             identity_map = x
 
-            p = int((kernel_size - 1) / 2)
+            p = int((kernel_size-1)/2)
             res = tf.pad(x, [[0, 0], [p, p], [p, p], [0, 0]], 'REFLECT')
             res = tf.layers.conv2d(res, filters=n_filters, kernel_size=kernel_size, strides=strides,
-                                   activation=None, padding='VALID')
+                    activation=None, padding='VALID')
             res = actv(tf.contrib.layers.instance_norm(res))
 
             res = tf.pad(res, [[0, 0], [p, p], [p, p], [0, 0]], 'REFLECT')
             res = tf.layers.conv2d(res, filters=n_filters, kernel_size=kernel_size, strides=strides,
-                                   activation=None, padding='VALID')
+                    activation=None, padding='VALID')
             res = tf.contrib.layers.instance_norm(res)
 
             assert res.get_shape().as_list() == identity_map.get_shape().as_list(), 'Mismatched shapes between input/output!'
@@ -121,9 +110,9 @@ class Network(object):
 
             return out
 
-        def upsample_block(x, filters, kernel_size=[3, 3], strides=2, padding='same', actv=actv, batch_norm=False):
-            bn_kwargs = {'center': True, 'scale': True, 'training': training, 'fused': True, 'renorm': False}
-            in_kwargs = {'center': True, 'scale': True}
+        def upsample_block(x, filters, kernel_size=[3,3], strides=2, padding='same', actv=actv, batch_norm=False):
+            bn_kwargs = {'center':True, 'scale':True, 'training':training, 'fused':True, 'renorm':False}
+            in_kwargs = {'center':True, 'scale': True}
             x = tf.layers.conv2d_transpose(x, filters, kernel_size, strides=strides, padding=padding, activation=None)
             if batch_norm is True:
                 x = tf.layers.batch_normalization(x, **bn_kwargs)
@@ -139,7 +128,7 @@ class Network(object):
         with tf.variable_scope('decoder', reuse=reuse):
             w_bar = tf.pad(w_bar, [[0, 0], [1, 1], [1, 1], [0, 0]], 'REFLECT')
             upsampled = Utils.conv_block(w_bar, filters=960, kernel_size=3, strides=1, padding='VALID', actv=actv)
-
+            
             # Process upsampled feature map with residual blocks
             res = residual_block(upsampled, 960, actv=actv)
             res = residual_block(res, 960, actv=actv)
@@ -154,11 +143,11 @@ class Network(object):
             # Upsample to original dimensions - mirror decoder
             f = [480, 240, 120, 60]
 
-            ups = upsample_block(res, f[0], 3, strides=[2, 2], padding='same')
-            ups = upsample_block(ups, f[1], 3, strides=[2, 2], padding='same')
-            ups = upsample_block(ups, f[2], 3, strides=[2, 2], padding='same')
-            ups = upsample_block(ups, f[3], 3, strides=[2, 2], padding='same')
-
+            ups = upsample_block(res, f[0], 3, strides=[2,2], padding='same')
+            ups = upsample_block(ups, f[1], 3, strides=[2,2], padding='same')
+            ups = upsample_block(ups, f[2], 3, strides=[2,2], padding='same')
+            ups = upsample_block(ups, f[3], 3, strides=[2,2], padding='same')
+            
             ups = tf.pad(ups, [[0, 0], [3, 3], [3, 3], [0, 0]], 'REFLECT')
             ups = tf.layers.conv2d(ups, 3, kernel_size=7, strides=1, padding='VALID')
 
@@ -166,12 +155,13 @@ class Network(object):
 
             return out
 
+
     @staticmethod
     def discriminator(x, config, training, reuse=False, actv=tf.nn.leaky_relu, use_sigmoid=False, ksize=4):
         # x is either generator output G(z) or drawn from the real data distribution
         # Patch-GAN discriminator based on arXiv 1711.11585
         # bn_kwargs = {'center':True, 'scale':True, 'training':training, 'fused':True, 'renorm':False}
-        in_kwargs = {'center': True, 'scale': True, 'activation_fn': actv}
+        in_kwargs = {'center':True, 'scale':True, 'activation_fn':actv}
 
         print('Shape of x:', x.get_shape().as_list())
 
@@ -191,9 +181,10 @@ class Network(object):
 
         return out
 
+
     @staticmethod
     def multiscale_discriminator(x, config, training, actv=tf.nn.leaky_relu, use_sigmoid=False,
-                                 ksize=4, mode='real', reuse=False):
+        ksize=4, mode='real', reuse=False):
         # x is either generator output G(z) or drawn from the real data distribution
         # Multiscale + Patch-GAN discriminator architecture based on arXiv 1711.11585
         print('<------------ Building multiscale discriminator architecture ------------>')
@@ -243,32 +234,29 @@ class Network(object):
         + z:    Drawn from latent distribution - [batch_size, noise_dim]
         + C:    Bottleneck depth, controls bpp - last dimension of encoder output
         """
-        init = tf.contrib.layers.xavier_initializer()
-        kwargs = {'center': True, 'scale': True, 'training': training, 'fused': True, 'renorm': False}
+        init =  tf.contrib.layers.xavier_initializer()
+        kwargs = {'center':True, 'scale':True, 'training':training, 'fused':True, 'renorm':False}
         with tf.variable_scope('noise_generator', reuse=reuse):
+
             # [batch_size, 4, 8, dim]
             with tf.variable_scope('fc1', reuse=reuse):
-                h2 = tf.layers.dense(z, units=4 * 8 * upsample_dim, activation=actv,
-                                     kernel_initializer=init)  # cifar-10
+                h2 = tf.layers.dense(z, units=4 * 8 * upsample_dim, activation=actv, kernel_initializer=init)  # cifar-10
                 h2 = tf.layers.batch_normalization(h2, **kwargs)
                 h2 = tf.reshape(h2, shape=[-1, 4, 8, upsample_dim])
 
             # [batch_size, 8, 16, dim/2]
             with tf.variable_scope('upsample1', reuse=reuse):
-                up1 = tf.layers.conv2d_transpose(h2, upsample_dim // 2, kernel_size=kernel_size, strides=2,
-                                                 padding='same', activation=actv)
+                up1 = tf.layers.conv2d_transpose(h2, upsample_dim//2, kernel_size=kernel_size, strides=2, padding='same', activation=actv)
                 up1 = tf.layers.batch_normalization(up1, **kwargs)
 
             # [batch_size, 16, 32, dim/4]
             with tf.variable_scope('upsample2', reuse=reuse):
-                up2 = tf.layers.conv2d_transpose(up1, upsample_dim // 4, kernel_size=kernel_size, strides=2,
-                                                 padding='same', activation=actv)
+                up2 = tf.layers.conv2d_transpose(up1, upsample_dim//4, kernel_size=kernel_size, strides=2, padding='same', activation=actv)
                 up2 = tf.layers.batch_normalization(up2, **kwargs)
 
             # [batch_size, 32, 64, dim/8]
             with tf.variable_scope('upsample3', reuse=reuse):
-                up3 = tf.layers.conv2d_transpose(up2, upsample_dim // 8, kernel_size=kernel_size, strides=2,
-                                                 padding='same', activation=actv)  # cifar-10
+                up3 = tf.layers.conv2d_transpose(up2, upsample_dim//8, kernel_size=kernel_size, strides=2, padding='same', activation=actv)  # cifar-10
                 up3 = tf.layers.batch_normalization(up3, **kwargs)
 
             with tf.variable_scope('conv_out', reuse=reuse):
@@ -280,8 +268,8 @@ class Network(object):
     @staticmethod
     def dcgan_discriminator(x, config, training, reuse=False, actv=tf.nn.relu):
         # x is either generator output G(z) or drawn from the real data distribution
-        init = tf.contrib.layers.xavier_initializer()
-        kwargs = {'center': True, 'scale': True, 'training': training, 'fused': True, 'renorm': False}
+        init =  tf.contrib.layers.xavier_initializer()
+        kwargs = {'center':True, 'scale':True, 'training':training, 'fused':True, 'renorm':False}
         print('Shape of x:', x.get_shape().as_list())
         x = tf.reshape(x, shape=[-1, 32, 32, 3])
         # x = tf.reshape(x, shape=[-1, 28, 28, 1])
@@ -305,3 +293,4 @@ class Network(object):
                 out = tf.layers.dense(fc1, units=2, activation=None, kernel_initializer=init)
 
         return out
+

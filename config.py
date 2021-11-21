@@ -15,6 +15,10 @@ class config_train(object):
     kernel_size = 3
     diagnostic_steps = 256
 
+    patch_size = 4
+
+
+
     # WGAN
     gradient_penalty = True
     lambda_gp = 10
