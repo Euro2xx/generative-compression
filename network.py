@@ -106,7 +106,7 @@ class Network(object):
             dense_layer(patches)
             return patches
 
-        def pos_embedding(patches):
+        def pos_embedding( max_res, dim):
             embs = []
             initializer = tf.random_uniform_initializer()
             for res in range(max_res + 1):
@@ -115,15 +115,14 @@ class Network(object):
 
 
                     xemb = tf.get_variable(name="x_emb", shape=[size, int(dim / 2)], initializer=initializer)
-                    yemb = xemb if shared else tf.get_variable(name="y_emb", shape=[size, int(dim / 2)],
-                                                                   initializer=initializer)
+                    yemb = tf.get_variable(name="y_emb", shape=[size, int(dim / 2)], initializer=initializer)
                     xemb = tf.tile(tf.expand_dims(xemb, axis=0), [size, 1, 1])
                     yemb = tf.tile(tf.expand_dims(yemb, axis=1), [1, size, 1])
                     emb = tf.concat([xemb, yemb], axis=-1)
                     embs.append(emb)
 
 
-            return patches
+            return emb
 
 
         with tf.variable_scope("patches"):
@@ -195,15 +194,15 @@ class Network(object):
 
             out = mlp()
             print("2 layer", out.get_shape().as_list())
-            out =
+
             print("3 layer", out.get_shape().as_list())
-            out =
+
             print("4 layer", out.get_shape().as_list())
             # Project channels onto space w/ dimension C
             # Feature maps have dimension W/16 x H/16 x C
             #out = tf.pad(out, [[0, 0], [1, 1], [1, 1], [0, 0]], 'REFLECT')
 
-            feature_map =
+            feature_map = out
             print("feature map", out.get_shape().as_list())
             return feature_map
 
