@@ -15,8 +15,9 @@ class config_train(object):
     kernel_size = 3
     diagnostic_steps = 256
 
+# changes
     patch_size = 4
-
+    patch_dim = 16
 
 
     # WGAN

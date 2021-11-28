@@ -6,8 +6,9 @@ import dnnlib.tflib as tflib
 from dnnlib.tflib.ops.upfirdn_2d import upsample_2d, downsample_2d, upsample_conv_2d, conv_downsample_2d
 from dnnlib.tflib.ops.fused_bias_act import fused_bias_act
 from dnnlib import EasyDict
-
 import math
+
+
 
 
 
@@ -32,7 +33,7 @@ class Network(object):
             x = actv(x)
             return x
 
-        def extract_patches(config, images):
+        def extract_patches(patch_size,patch_dim, images):
             batch_size = tf.shape(images)[0]
             patches = tf.image.extract_patches(
                 images=images,
@@ -41,17 +42,23 @@ class Network(object):
                 rates=[1, 1, 1, 1],
                 padding="VALID",
             )
-            patches = tf.reshape(patches, [batch_size, -1, self.patch_dim])
+            patches = tf.reshape(patches, [batch_size, -1, patch_dim])
             return patches
+
+        def patch_proj(patches):
+
+
+
 
         with tf.variable_scope('encoder_{}'.format(scope), reuse=reuse):
             # Run convolutions
-            f = [60, 120, 240, 480, 960]
-            x = tf.pad(x, [[0, 0], [3, 3], [3, 3], [0, 0]], 'REFLECT')
-            out = conv_block(x, filters=f[0], kernel_size=7, strides=1, padding='VALID', actv=actv)
+            batch_size = tf.shape(x)[0]
+            patches = extract_patches(config, x)
+            print("patches", patches.get_shape().as_list())
+            x = patch_proj(patches)
+            out = x
+            print("prepared patches", out.get_shape().as_list())
 
-            out = conv_block(out, filters=f[1], kernel_size=3, strides=2, actv=actv)
-            print("1 layer", out.get_shape().as_list())
             out = conv_block(out, filters=f[2], kernel_size=3, strides=2, actv=actv)
             print("2 layer", out.get_shape().as_list())
             out = conv_block(out, filters=f[3], kernel_size=3, strides=2, actv=actv)
