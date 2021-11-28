@@ -101,23 +101,38 @@ class Network(object):
             )
             patches = tf.reshape(patches, [batch_size, -1, patch_dim])
             return patches
-
         def patch_proj(patches):
 
-
-
+            dense_layer(patches)
             return patches
 
         def pos_embedding(patches):
+            embs = []
+            initializer = tf.random_uniform_initializer()
+            for res in range(max_res + 1):
+                with tf.variable_scope("pos_emb%d" % res):
+                    size = 2 ** res
+
+
+                    xemb = tf.get_variable(name="x_emb", shape=[size, int(dim / 2)], initializer=initializer)
+                    yemb = xemb if shared else tf.get_variable(name="y_emb", shape=[size, int(dim / 2)],
+                                                                   initializer=initializer)
+                    xemb = tf.tile(tf.expand_dims(xemb, axis=0), [size, 1, 1])
+                    yemb = tf.tile(tf.expand_dims(yemb, axis=1), [1, size, 1])
+                    emb = tf.concat([xemb, yemb], axis=-1)
+                    embs.append(emb)
+
 
             return patches
 
 
         with tf.variable_scope("patches"):
+
             batch_size = tf.shape(x)[0]
             patches = extract_patches(config, x)
             patches = patch_proj(patches)
-            patches = pos_embedding(patches)
+            embedding = pos_embedding(patches)
+            patches = patches +embedding
 
             print("patches", patches.get_shape().as_list())
             x = patches
@@ -139,8 +154,6 @@ class Network(object):
             shape = get_shape(x)
             _x = x
 
-            if y is not None:
-                x = transformer_layer(from_tensor=x, to_tensor=y, dim=dim, name=name, **kwargs)[0]
 
             if ff:
                 if pool:
