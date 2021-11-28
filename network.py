@@ -8,30 +8,87 @@ from dnnlib.tflib.ops.fused_bias_act import fused_bias_act
 from dnnlib import EasyDict
 import math
 
+def get_shape(x):
+    shape, dyn_shape = x.shape.as_list().copy(), tf.shape(x)
+    for index, dim in enumerate(shape):
+        if dim is None:
+            shape[index] = dyn_shape[index]
+    return shape
 
+# Given a tensor with elements [batch_size, ...] compute the size of each element in the batch
+def element_dim(x):
+    return np.prod(get_shape(x)[1:])
+
+# Flatten all dimensions of a tensor except the fist/last one
+def to_2d(x, mode):
+    shape = get_shape(x)
+    if len(shape) == 2:
+        return x
+    if mode == "last":
+        return tf.reshape(x, [-1, shape[-1]])
+    else:
+        return tf.reshape(x, [shape[0], element_dim(x)])
+
+# Linear layer
+# ----------------------------------------------------------------------------
+
+# Get/create a weight tensor for a convolution or fully-connected layer
+def get_weight(shape, gain = 1, use_wscale = True, lrmul = 1, weight_var = "weight"):
+    fan_in = np.prod(shape[:-1])
+    he_std = gain / np.sqrt(fan_in)
+
+    # Equalized learning rate and custom learning rate multiplier
+    if use_wscale:
+        init_std = 1.0 / lrmul
+        runtime_coef = he_std * lrmul
+    else:
+        init_std = he_std / lrmul
+        runtime_coef = lrmul
+
+    # Create variable
+    init = tf.initializers.random_normal(0, init_std)
+    return tf.get_variable(weight_var, shape = shape, initializer = init) * runtime_coef
+
+# Linear dense layer (doesn't include biases. For that see function below)
+def dense_layer(x, dim, gain = 1, use_wscale = True, lrmul = 1, weight_var = "weight", name = None):
+    if name is not None:
+        weight_var = "{}_{}".format(weight_var, name)
+
+    if len(get_shape(x)) > 2:
+        x = to_2d(x, "first")
+
+    w = get_weight([get_shape(x)[1], dim], gain = gain, use_wscale = use_wscale,
+        lrmul = lrmul, weight_var = weight_var)
+
+    return tf.matmul(x, w)
+
+# Apply bias and optionally an activation function
+def apply_bias_act(x, act = "linear", alpha = None, gain = None, lrmul = 1, bias_var = "bias", name = None):
+    if name is not None:
+        bias_var = "{}_{}".format(bias_var, name)
+    b = tf.get_variable(bias_var, shape = [get_shape(x)[1]], initializer = tf.initializers.zeros()) * lrmul
+    return fused_bias_act(x, b = b, act = act, alpha = alpha, gain = gain)
+
+# Feature normalization
+# ----------------------------------------------------------------------------
+
+# Apply feature normalization, either instance, batch or layer normalization.
+# x shape is NCHW
+def norm(x, norm_type, parametric = True):
+    if norm_type == "instance":
+        x = tf.contrib.layers.instance_norm(x, data_format = "NCHW", center = parametric, scale = parametric)
+    elif norm_type == "batch":
+        x = tf.contrib.layers.batch_norm(x, data_format = "NCHW", center = parametric, scale = parametric)
+    elif norm_type == "layer":
+        x = tf.contrib.layers.layer_norm(inputs = x, begin_norm_axis = -1, begin_params_axis = -1)
+    return x
 
 
 
 class Network(object):
 
     @staticmethod
-    def encoder(x, config, training, C, reuse=False, actv=tf.nn.relu, scope='image'):
-        """
-        Process image x ([512,1024]) into a feature map of size W/16 x H/16 x C
-         + C:       Bottleneck depth, controls bpp
-         + Output:  Projection onto C channels, C = {2,4,8,16}
-        """
-        init = tf.contrib.layers.xavier_initializer()
-        print('<------------ Building global {} generator architecture ------------>'.format(scope))
-
-        def conv_block(x, filters, kernel_size=[3, 3], strides=2, padding='same', actv=actv, init=init):
-            bn_kwargs = {'center': True, 'scale': True, 'training': training, 'fused': True, 'renorm': False}
-            in_kwargs = {'center': True, 'scale': True}
-            x = tf.layers.conv2d(x, filters, kernel_size, strides=strides, padding=padding, activation=None)
-            # x = tf.layers.batch_normalization(x, **bn_kwargs)
-            x = tf.contrib.layers.instance_norm(x, **in_kwargs)
-            x = actv(x)
-            return x
+    def patches(x, config, training):
 
         def extract_patches(patch_size,patch_dim, images):
             batch_size = tf.shape(images)[0]
@@ -49,27 +106,91 @@ class Network(object):
 
 
 
+            return patches
+
+        def pos_embedding(patches):
+
+            return patches
+
+
+        with tf.variable_scope("patches"):
+            batch_size = tf.shape(x)[0]
+            patches = extract_patches(config, x)
+            patches = patch_proj(patches)
+            patches = pos_embedding(patches)
+
+            print("patches", patches.get_shape().as_list())
+            x = patches
+
+            return x
+
+
+    @staticmethod
+    def encoder(x, config, training, C, reuse=False, actv=tf.nn.relu, scope='image'):
+        """
+        Process image x ([512,1024]) into a feature map of size W/16 x H/16 x C
+         + C:       Bottleneck depth, controls bpp
+         + Output:  Projection onto C channels, C = {2,4,8,16}
+        """
+
+        print('<------------ Building global {} generator architecture ------------>'.format(scope))
+
+        def nnlayer(x, dim, act, lrmul=1, y=None, ff=True, pool=False, name="", **kwargs):
+            shape = get_shape(x)
+            _x = x
+
+            if y is not None:
+                x = transformer_layer(from_tensor=x, to_tensor=y, dim=dim, name=name, **kwargs)[0]
+
+            if ff:
+                if pool:
+                    x = to_2d(x, "last")
+
+                with tf.variable_scope("Dense%s_0" % name):
+                    x = apply_bias_act(dense_layer(x, dim, lrmul=lrmul), act=act, lrmul=lrmul)
+                with tf.variable_scope("Dense%s_1" % name):
+                    x = apply_bias_act(dense_layer(x, dim, lrmul=lrmul), lrmul=lrmul)
+
+                if pool:
+                    x = tf.reshape(x, shape)
+
+                x = tf.nn.leaky_relu(x + _x)
+
+            return x
+
+
+
+        def mlp(x,  layers_num, dim, act, lrmul, pooling="mean", transformer=False, norm_type=None, **kwargs):
+            shape = get_shape(x)
+
+            for layer_idx in range(layers_num):
+                with tf.variable_scope("Dense%d" % layer_idx):
+                    x = apply_bias_act(dense_layer(x, dim, lrmul=lrmul), act=act, lrmul=lrmul)
+                    x = norm(x, norm_type)
+
+            x = tf.reshape(x, [-1] + shape[1:-1] + [dim])
+            return x
+
+
+
 
         with tf.variable_scope('encoder_{}'.format(scope), reuse=reuse):
             # Run convolutions
-            batch_size = tf.shape(x)[0]
-            patches = extract_patches(config, x)
-            print("patches", patches.get_shape().as_list())
-            x = patch_proj(patches)
+
             out = x
             print("prepared patches", out.get_shape().as_list())
 
-            out = conv_block(out, filters=f[2], kernel_size=3, strides=2, actv=actv)
+            out = mlp()
             print("2 layer", out.get_shape().as_list())
-            out = conv_block(out, filters=f[3], kernel_size=3, strides=2, actv=actv)
+            out =
             print("3 layer", out.get_shape().as_list())
-            out = conv_block(out, filters=f[4], kernel_size=3, strides=2, actv=actv)
+            out =
             print("4 layer", out.get_shape().as_list())
             # Project channels onto space w/ dimension C
             # Feature maps have dimension W/16 x H/16 x C
-            out = tf.pad(out, [[0, 0], [1, 1], [1, 1], [0, 0]], 'REFLECT')
+            #out = tf.pad(out, [[0, 0], [1, 1], [1, 1], [0, 0]], 'REFLECT')
 
-            feature_map = conv_block(out, filters=C, kernel_size=3, strides=1, padding='VALID', actv=actv)
+            feature_map =
             print("feature map", out.get_shape().as_list())
             return feature_map
 
