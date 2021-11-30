@@ -93,24 +93,32 @@ def norm(x, norm_type, parametric = True):
 class Network(object):
 
     @staticmethod
-    def patches(x, config, training):
+    def encoder(x, config, training, C, reuse=False, actv=tf.nn.relu, scope='image'):
+        """
+        Process image x ([512,1024]) into a feature map of size W/16 x H/16 x C
+         + C:       Bottleneck depth, controls bpp
+         + Output:  Projection onto C channels, C = {2,4,8,16}
+        """
 
-        def extract_patches(patch_size, patch_dim, x):
+        print('<------------ Building global {} generator architecture ------------>'.format(scope))
+
+
+
+        def extract_patches(x, patch_dim, training):
             batch_size = tf.shape(x)[0]
-            patches=[]
+
             patches = tf.image.extract_patches(
                 images=x,
-                sizes=[1, patch_size, patch_size, 1],
-                strides=[1, patch_size, patch_size, 1],
+                sizes=[1, 4, 4, 1],
+                strides=[1, 4, 4, 1],
                 rates=[1, 1, 1, 1],
-                padding="VALID",
-            )
+                padding="VALID"
+                )
 
             patches = tf.reshape(patches, [batch_size, -1, patch_dim])
             return patches
 
         def patch_proj(patches):
-
             Dense(patches)
             return patches
 
@@ -121,7 +129,6 @@ class Network(object):
                 with tf.variable_scope("pos_emb%d" % res):
                     size = 2 ** res
 
-
                     xemb = tf.get_variable(name="x_emb", shape=[size, int(dim / 2)], initializer=initializer)
                     yemb = tf.get_variable(name="y_emb", shape=[size, int(dim / 2)], initializer=initializer)
                     xemb = tf.tile(tf.expand_dims(xemb, axis=0), [size, 1, 1])
@@ -129,36 +136,7 @@ class Network(object):
                     emb = tf.concat([xemb, yemb], axis=-1)
                     embs.append(emb)
 
-
             return emb
-
-
-        with tf.variable_scope("patches"):
-
-            batch_size = tf.shape(x)[0]
-            patches = extract_patches(x, config, training)
-            print("patchesvor", patches.get_shape().as_list())
-            patches = patch_proj(patches)
-            print("patchesvor2", patches.get_shape().as_list())
-            embedding = pos_embedding(patches)
-            print("embedding", embedding.get_shape().as_list())
-            patches = patches + embedding
-
-            print("patches", patches.get_shape().as_list())
-            x = patches
-
-            return x
-
-
-    @staticmethod
-    def encoder(x, config, training, C, reuse=False, actv=tf.nn.relu, scope='image'):
-        """
-        Process image x ([512,1024]) into a feature map of size W/16 x H/16 x C
-         + C:       Bottleneck depth, controls bpp
-         + Output:  Projection onto C channels, C = {2,4,8,16}
-        """
-
-        print('<------------ Building global {} generator architecture ------------>'.format(scope))
 
         def nnlayer(x, dim, act, lrmul=1, y=None, ff=True, pool=False, name="", **kwargs):
             shape = get_shape(x)
@@ -183,7 +161,7 @@ class Network(object):
 
 
 
-        def mlp(x,  layers_num, dim, act, lrmul, pooling="mean", transformer=False, norm_type=None, **kwargs):
+        def mlp(x,  layers_num, dim, act, lrmul, norm_type=None, **kwargs):
             shape = get_shape(x)
 
             for layer_idx in range(layers_num):
@@ -199,11 +177,21 @@ class Network(object):
 
         with tf.variable_scope('encoder_{}'.format(scope), reuse=reuse):
             # Run convolutions
+            batch_size = tf.shape(x)[0]
+            patches = extract_patches(x, config)
+            print("patchesvor", patches.get_shape().as_list())
+            patches = patch_proj(patches)
+            print("patchesvor2", patches.get_shape().as_list())
+            embedding = pos_embedding(patches)
+            print("embedding", embedding.get_shape().as_list())
+            patches = patches + embedding
+
+            print("patches+emb", patches.get_shape().as_list())
+            x = patches
 
 
 
-
-            out = mlp(x, dim, act, lrmul)
+            out = mlp(x, config)
             print("2 layer", out.get_shape().as_list())
 
 
