@@ -18,7 +18,8 @@ class config_train(object):
 # changes
     patch_size = 4
     patch_dim = 16
-
+    max_res = 1024
+    dim =256
 
     # WGAN
     gradient_penalty = True

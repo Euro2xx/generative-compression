@@ -55,7 +55,7 @@ class Model():
         # Global generator: Encode -> quantize -> reconstruct
         # =======================================================================================================>>>
         with tf.variable_scope('generator'):
-            self.patches = Network.patches(self.example, config)
+            self.patches = Network.patches(self.example, config, self.training_phase)
             self.feature_map = Network.encoder(self.example, config, self.training_phase, config.channel_bottleneck)
 
             self.w_hat = Network.quantizer(self.feature_map, config)

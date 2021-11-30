@@ -7,6 +7,11 @@ from dnnlib.tflib.ops.upfirdn_2d import upsample_2d, downsample_2d, upsample_con
 from dnnlib.tflib.ops.fused_bias_act import fused_bias_act
 from dnnlib import EasyDict
 import math
+from tensorflow.keras.layers import (
+    Dense,
+    Dropout,
+    LayerNormalization,
+)
 
 def get_shape(x):
     shape, dyn_shape = x.shape.as_list().copy(), tf.shape(x)
@@ -90,23 +95,26 @@ class Network(object):
     @staticmethod
     def patches(x, config, training):
 
-        def extract_patches(patch_size,patch_dim, images):
-            batch_size = tf.shape(images)[0]
+        def extract_patches(patch_size, patch_dim, x):
+            batch_size = tf.shape(x)[0]
+            patches=[]
             patches = tf.image.extract_patches(
-                images=images,
+                images=x,
                 sizes=[1, patch_size, patch_size, 1],
                 strides=[1, patch_size, patch_size, 1],
                 rates=[1, 1, 1, 1],
                 padding="VALID",
             )
+
             patches = tf.reshape(patches, [batch_size, -1, patch_dim])
             return patches
+
         def patch_proj(patches):
 
-            dense_layer(patches)
+            Dense(patches)
             return patches
 
-        def pos_embedding( max_res, dim):
+        def pos_embedding(max_res, dim):
             embs = []
             initializer = tf.random_uniform_initializer()
             for res in range(max_res + 1):
@@ -128,10 +136,13 @@ class Network(object):
         with tf.variable_scope("patches"):
 
             batch_size = tf.shape(x)[0]
-            patches = extract_patches(config, x)
+            patches = extract_patches(x, config, training)
+            print("patchesvor", patches.get_shape().as_list())
             patches = patch_proj(patches)
+            print("patchesvor2", patches.get_shape().as_list())
             embedding = pos_embedding(patches)
-            patches = patches +embedding
+            print("embedding", embedding.get_shape().as_list())
+            patches = patches + embedding
 
             print("patches", patches.get_shape().as_list())
             x = patches
