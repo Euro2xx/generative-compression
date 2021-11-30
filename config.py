@@ -20,6 +20,7 @@ class config_train(object):
     patch_dim = 16
     max_res = 1024
     dim =256
+    layersnum= 3
 
     # WGAN
     gradient_penalty = True

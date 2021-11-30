@@ -200,18 +200,13 @@ class Network(object):
         with tf.variable_scope('encoder_{}'.format(scope), reuse=reuse):
             # Run convolutions
 
-            out = x
-            print("prepared patches", out.get_shape().as_list())
 
-            out = mlp()
+
+
+            out = mlp(x, dim, act, lrmul)
             print("2 layer", out.get_shape().as_list())
 
-            print("3 layer", out.get_shape().as_list())
 
-            print("4 layer", out.get_shape().as_list())
-            # Project channels onto space w/ dimension C
-            # Feature maps have dimension W/16 x H/16 x C
-            #out = tf.pad(out, [[0, 0], [1, 1], [1, 1], [0, 0]], 'REFLECT')
 
             feature_map = out
             print("feature map", out.get_shape().as_list())
