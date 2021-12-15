@@ -104,13 +104,13 @@ class Network(object):
 
 
 
-        def extract_patches(x, patch_dim, training):
+        def extract_patches(channels,patch_size,x):
             batch_size = tf.shape(x)[0]
-
+            patch_dim= 512
             patches = tf.image.extract_patches(
                 images=x,
-                sizes=[1, 4, 4, 1],
-                strides=[1, 4, 4, 1],
+                sizes=[1, patch_size, patch_size, 1],
+                strides=[1, patch_size, patch_size, 1],
                 rates=[1, 1, 1, 1],
                 padding="VALID"
                 )
@@ -178,7 +178,8 @@ class Network(object):
         with tf.variable_scope('encoder_{}'.format(scope), reuse=reuse):
             # Run convolutions
             batch_size = tf.shape(x)[0]
-            patches = extract_patches(x, config)
+            patches = extract_patches(x, config, training)
+
             print("patchesvor", patches.get_shape().as_list())
             patches = patch_proj(patches)
             print("patchesvor2", patches.get_shape().as_list())

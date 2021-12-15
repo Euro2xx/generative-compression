@@ -15,9 +15,10 @@ class config_train(object):
     kernel_size = 3
     diagnostic_steps = 256
 
-# changes
+    # changes
     patch_size = 4
     patch_dim = 16
+    channels=3
     max_res = 1024
     dim =256
     layersnum= 3
@@ -54,6 +55,13 @@ class config_test(object):
     optimizer = 'adam'
     kernel_size = 3
     diagnostic_steps = 256
+
+    # changes
+    patch_size = 4
+    patch_dim = 16
+    max_res = 1024
+    dim = 256
+    layersnum = 3
 
     # WGAN
     gradient_penalty = True
